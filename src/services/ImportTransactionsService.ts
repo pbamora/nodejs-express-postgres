@@ -14,16 +14,20 @@ interface CSVtransaction {
 
 class ImportTransactionsService {
   async execute(filePath: string): Promise<Transaction[]> {
+    // pegamos o caminho do arquivo
     const contactsReadStream = fs.createReadStream(filePath);
     const categoriesRepo = getRepository(Category);
     const transactionRepo = getCustomRepository(TransactionsRepository);
 
+    // utilizamos a lib csvPase para ignorar a primeira linha (título)
     const parses = csvParse({
       from_line: 2,
     });
 
+    // Agora de fato ignoramos a linha do arquivo passado
     const parseCsv = contactsReadStream.pipe(parses);
 
+    // criamos um array para armazenar temporariamente os dados na memoria
     const transactions: CSVtransaction[] = [];
     const categories: string[] = [];
 
@@ -39,14 +43,18 @@ class ImportTransactionsService {
       transactions.push({ title, type, value, category });
     });
 
+    // como o metodo parseCsv.on não é sincrono utilizamos uma promise até que ela seja resolvida
     await new Promise(resolve => parseCsv.on('end', resolve));
 
+    // Próximo passo é verificar se as categorias que estão na memoria
+    // já existem no banco de dados, e utilizamos o titulo para isso
     const existentCategories = await categoriesRepo.find({
       where: {
         title: In(categories),
       },
     });
 
+    // mapegamos as categorias para pegar somente o título delas
     const categoriesTitle = existentCategories.map(
       (category: Category) => category.title,
     );
